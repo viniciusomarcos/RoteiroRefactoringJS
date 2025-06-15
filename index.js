@@ -1,6 +1,6 @@
 const { readFileSync } = require('fs');
 
-// Funções utilitárias que permanecem fora da classe
+// Função utilitária
 function formatarMoeda(valor) {
   return new Intl.NumberFormat("pt-BR", {
     style: "currency",
@@ -9,24 +9,36 @@ function formatarMoeda(valor) {
   }).format(valor / 100);
 }
 
-function getPeca(pecas, apre) {
-  return pecas[apre.id];
+// Classe que encapsula o acesso aos dados das peças
+class Repositorio {
+  constructor() {
+    this.pecas = JSON.parse(readFileSync('./pecas.json'));
+  }
+
+  getPeca(apre) {
+    return this.pecas[apre.id];
+  }
 }
 
-// Classe que encapsula a lógica de negócio (cálculos)
+// Classe de serviço, agora dependendo de um repositório
 class ServicoCalculoFatura {
+  constructor(repo) {
+    this.repo = repo;
+  }
 
-  calcularCredito(pecas, apre) {
+  calcularCredito(apre) {
     let creditos = 0;
     creditos += Math.max(apre.audiencia - 30, 0);
-    if (getPeca(pecas, apre).tipo === "comedia")
+    // Acessa as peças através do repositório injetado
+    if (this.repo.getPeca(apre).tipo === "comedia")
       creditos += Math.floor(apre.audiencia / 5);
     return creditos;
   }
 
-  calcularTotalApresentacao(pecas, apre) {
+  calcularTotalApresentacao(apre) {
     let total = 0;
-    switch (getPeca(pecas, apre).tipo) {
+    // Acessa as peças através do repositório injetado
+    switch (this.repo.getPeca(apre).tipo) {
       case "tragedia":
         total = 40000;
         if (apre.audiencia > 30) {
@@ -41,63 +53,45 @@ class ServicoCalculoFatura {
         total += 300 * apre.audiencia;
         break;
       default:
-        throw new Error(`Peça desconhecida: ${getPeca(pecas, apre).tipo}`);
+        throw new Error(`Peça desconhecida: ${this.repo.getPeca(apre).tipo}`);
     }
     return total;
   }
 
-  calcularTotalFatura(pecas, apresentacoes) {
+  calcularTotalFatura(apresentacoes) {
     return apresentacoes
-      // A chamada interna agora usa 'this'
-      .reduce((total, apre) => total + this.calcularTotalApresentacao(pecas, apre), 0);
+      .reduce((total, apre) => total + this.calcularTotalApresentacao(apre), 0);
   }
 
-  calcularTotalCreditos(pecas, apresentacoes) {
+  calcularTotalCreditos(apresentacoes) {
     return apresentacoes
-      // A chamada interna agora usa 'this'
-      .reduce((total, apre) => total + this.calcularCredito(pecas, apre), 0);
+      .reduce((total, apre) => total + this.calcularCredito(apre), 0);
   }
 }
 
-// Funções de apresentação (agora recebem o serviço de cálculo)
-function gerarFaturaStr(fatura, pecas, calc) {
+// Função de apresentação, agora não precisa mais do parâmetro 'pecas'
+function gerarFaturaStr(fatura, calc) {
   let faturaStr = `Fatura ${fatura.cliente}\n`;
   for (let apre of fatura.apresentacoes) {
-    // As chamadas de cálculo agora são feitas através do objeto 'calc'
-    faturaStr += `  ${getPeca(pecas, apre).nome}: ${formatarMoeda(calc.calcularTotalApresentacao(pecas, apre))} (${apre.audiencia} assentos)\n`;
+    // Acessa o nome da peça através do serviço -> repositório
+    faturaStr += `  ${calc.repo.getPeca(apre).nome}: ${formatarMoeda(calc.calcularTotalApresentacao(apre))} (${apre.audiencia} assentos)\n`;
   }
-  // As chamadas de cálculo agora são feitas através do objeto 'calc'
-  faturaStr += `Valor total: ${formatarMoeda(calc.calcularTotalFatura(pecas, fatura.apresentacoes))}\n`;
-  faturaStr += `Créditos acumulados: ${calc.calcularTotalCreditos(pecas, fatura.apresentacoes)} \n`;
+  faturaStr += `Valor total: ${formatarMoeda(calc.calcularTotalFatura(fatura.apresentacoes))}\n`;
+  faturaStr += `Créditos acumulados: ${calc.calcularTotalCreditos(fatura.apresentacoes)} \n`;
   return faturaStr;
 }
 
-function gerarFaturaHTML(fatura, pecas, calc) {
-  /*
-  let faturaHTML = `<html><p> Fatura ${fatura.cliente} </p>`;
-  faturaHTML += "<ul>";
-  for (let apre of fatura.apresentacoes) {
-    faturaHTML += `<li>  ${getPeca(pecas, apre).nome}: ${formatarMoeda(calc.calcularTotalApresentacao(pecas, apre))} (${apre.audiencia} assentos) </li>`;
-  }
-  faturaHTML += "</ul>";
-  faturaHTML += `<p> Valor total: ${formatarMoeda(calc.calcularTotalFatura(pecas, fatura.apresentacoes))} </p>`;
-  faturaHTML += `<p> Créditos acumulados: ${calc.calcularTotalCreditos(pecas, fatura.apresentacoes)} </p>`;
-  faturaHTML += "</html>";
-  return faturaHTML;
-  */
+function gerarFaturaHTML(fatura, calc) {
+  /* ... corpo comentado ... */
 }
 
 
-// --- Execução do Código ---
+// --- Execução do Código Principal ---
 const faturas = JSON.parse(readFileSync('./faturas.json'));
-const pecas = JSON.parse(readFileSync('./pecas.json'));
 
-// 1. Cria uma instância do serviço de cálculo
-const calc = new ServicoCalculoFatura();
+// Cria o serviço de cálculo, injetando uma nova instância do repositório
+const calc = new ServicoCalculoFatura(new Repositorio());
 
-// 2. Passa a instância para a função de geração de fatura
-const faturaStr = gerarFaturaStr(faturas, pecas, calc);
+// Gera a fatura, agora sem passar as peças diretamente
+const faturaStr = gerarFaturaStr(faturas, calc);
 console.log(faturaStr);
-
-// const faturaHTML = gerarFaturaHTML(faturas, pecas, calc);
-// console.log(faturaHTML);
