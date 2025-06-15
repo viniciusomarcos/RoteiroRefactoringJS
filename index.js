@@ -9,16 +9,17 @@ function gerarFaturaStr (fatura, pecas) {
                             minimumFractionDigits: 2 }).format;
   
     for (let apre of fatura.apresentacoes) {
-      const peca = pecas[apre.id];
-      let total = calcularTotalApresentacao(apre, peca);
+      //const peca = pecas[apre.id];
+      const peca = getPeca(apre);
+      let total = calcularTotalApresentacao(apre);
   
       // créditos para próximas contratações
       creditos += Math.max(apre.audiencia - 30, 0);
-      if (peca.tipo === "comedia") 
+      if (getPeca(apre).tipo === "comedia") 
          creditos += Math.floor(apre.audiencia / 5);
   
       // mais uma linha da fatura
-      faturaStr += `  ${peca.nome}: ${formato(total/100)} (${apre.audiencia} assentos)\n`;
+      faturaStr += `  ${getPeca(apre).nome}: ${formato(total/100)} (${apre.audiencia} assentos)\n`;
       totalFatura += total;
     }
     faturaStr += `Valor total: ${formato(totalFatura/100)}\n`;
@@ -26,9 +27,9 @@ function gerarFaturaStr (fatura, pecas) {
     return faturaStr;
   }
 
-function calcularTotalApresentacao(apre, peca){
+function calcularTotalApresentacao(apre){
     let total = 0;
-    switch (peca.tipo) {
+    switch (getPeca(apre).tipo) {
     case "tragedia":
       total = 40000;
       if (apre.audiencia > 30) {
@@ -43,10 +44,15 @@ function calcularTotalApresentacao(apre, peca){
       total += 300 * apre.audiencia;
       break;
     default:
-        throw new Error(`Peça desconhecia: ${peca.tipo}`);
+        throw new Error(`Peça desconhecia: ${getPeca(apre).tipo}`);
     }
     return total;
 }
+
+// função query
+  function getPeca(apresentacao) {
+    return pecas[apresentacao.id];
+  }
 
 const faturas = JSON.parse(readFileSync('./faturas.json'));
 const pecas = JSON.parse(readFileSync('./pecas.json'));
